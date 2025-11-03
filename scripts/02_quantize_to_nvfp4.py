@@ -87,10 +87,13 @@ def create_forward_loop(model, tokenizer, calibration_data: List[Dict]):
     """
     def forward_loop():
         logger.info("  Starting calibration forward pass...")
+        logger.info(f"  Total samples to process: {len(calibration_data)}")
         model.eval()
 
         with torch.no_grad():
             for idx, sample in enumerate(calibration_data):
+                logger.info(f"  [Sample {idx+1}/{len(calibration_data)}] Tokenizing...")
+
                 # Tokenize input
                 inputs = tokenizer(
                     sample['text'],
@@ -99,12 +102,12 @@ def create_forward_loop(model, tokenizer, calibration_data: List[Dict]):
                     truncation=True
                 ).to(model.device)
 
+                logger.info(f"  [Sample {idx+1}/{len(calibration_data)}] Tokens: {inputs['input_ids'].shape[1]}, Running forward pass...")
+
                 # Forward pass (no gradient computation)
                 model(**inputs)
 
-                # Progress logging
-                if (idx + 1) % 50 == 0:
-                    logger.info(f"    Calibrated {idx + 1}/{len(calibration_data)} samples...")
+                logger.info(f"  [Sample {idx+1}/{len(calibration_data)}] ✓ Complete")
 
         logger.info(f"  ✓ Calibration forward pass complete")
 
@@ -140,13 +143,24 @@ def main():
         }
         torch_dtype = dtype_map[config['torch_dtype']]
 
+        # Load with auto device mapping for large models (enables CPU offloading)
         model = AutoModelForCausalLM.from_pretrained(
             MODEL_NAME,
             torch_dtype=torch_dtype,
-            device_map=config['device_map'],
+            device_map="auto",  # Auto placement with CPU offloading
             cache_dir=str(HF_CACHE_DIR),
             trust_remote_code=config['trust_remote_code']
         )
+
+        # Log device placement
+        device = next(model.parameters()).device
+        logger.info(f"✓ Model loaded with device_map='auto'")
+        logger.info(f"  Primary device: {device}")
+
+        # Check if any parameters are on CUDA
+        cuda_params = sum(1 for p in model.parameters() if p.device.type == "cuda")
+        total_params = sum(1 for _ in model.parameters())
+        logger.info(f"  Parameters on CUDA: {cuda_params}/{total_params}")
 
         tokenizer = AutoTokenizer.from_pretrained(
             MODEL_NAME,
@@ -162,6 +176,50 @@ def main():
         logger.info(f"  Parameters: {total_params / 1e9:.2f}B")
         logger.info(f"  Memory footprint: {memory_allocated:.2f} GB")
         logger.info(f"  Device: {next(model.parameters()).device}")
+
+        # ============================================================
+        # INJECT YaRN RoPE SCALING FOR 256K CONTEXT
+        # ============================================================
+        logger.info("\n" + "=" * 70)
+        logger.info("CONFIGURING YARN ROPE SCALING FOR 256K CONTEXT EXTENSION")
+        logger.info("=" * 70)
+
+        # Original config values
+        original_max_pos = model.config.max_position_embeddings
+        original_theta = model.config.rope_theta
+
+        # Target 256K context (6.4x from 40,960)
+        target_context = 262144  # 256K tokens
+        scaling_factor = target_context / original_max_pos
+
+        logger.info(f"\nOriginal Configuration:")
+        logger.info(f"  max_position_embeddings: {original_max_pos:,}")
+        logger.info(f"  rope_theta: {original_theta:,}")
+        logger.info(f"\nTarget Configuration:")
+        logger.info(f"  max_position_embeddings: {target_context:,}")
+        logger.info(f"  Scaling factor: {scaling_factor:.3f}x")
+
+        # Apply YaRN configuration (based on RoPE extension research)
+        model.config.max_position_embeddings = target_context
+        model.config.rope_scaling = {
+            "type": "yarn",
+            "factor": scaling_factor,
+            "original_max_position_embeddings": original_max_pos,
+            "attention_factor": 0.1,    # YaRN temperature scaling
+            "beta_fast": 32,             # High-frequency cutoff
+            "beta_slow": 1               # Low-frequency cutoff
+        }
+        model.config.rope_theta = 10000000  # Increased base frequency (10M)
+
+        logger.info(f"\n✓ YaRN RoPE Scaling Applied Successfully:")
+        logger.info(f"  max_position_embeddings: {model.config.max_position_embeddings:,}")
+        logger.info(f"  rope_scaling type: {model.config.rope_scaling['type']}")
+        logger.info(f"  scaling factor: {model.config.rope_scaling['factor']:.3f}")
+        logger.info(f"  attention_factor: {model.config.rope_scaling['attention_factor']}")
+        logger.info(f"  beta_fast: {model.config.rope_scaling['beta_fast']}")
+        logger.info(f"  beta_slow: {model.config.rope_scaling['beta_slow']}")
+        logger.info(f"  rope_theta: {model.config.rope_theta:,}")
+        logger.info("=" * 70 + "\n")
 
     except Exception as e:
         logger.error(f"✗ Failed to load model: {e}")

@@ -14,7 +14,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Configuration
 PROJECT_DIR="$SCRIPT_DIR"
-QUANTIZED_MODEL_DIR="$PROJECT_DIR/quantized-output/Qwen3-VLTO-32B-Instruct-NVFP4"
+QUANTIZED_MODEL_DIR="$PROJECT_DIR/quantized-output/Qwen3-VLTO-32B-Instruct-NVFP4-256K"
 HF_CACHE_DIR="${HF_CACHE_DIR:-$HOME/.cache/huggingface}"
 CONTAINER_NAME="vllm-nvfp4-server"
 HOST_PORT="8355"
@@ -56,7 +56,8 @@ fi
 
 echo ""
 echo "Starting vLLM server..."
-echo "  Model: Qwen3-VLTO-32B-Instruct-NVFP4"
+echo "  Model: Qwen3-VLTO-32B-Instruct-NVFP4-256K"
+echo "  Context: 256K tokens (262,144) with YaRN RoPE scaling"
 echo "  Port: $HOST_PORT (mapped to container port $CONTAINER_PORT)"
 echo "  API: http://localhost:$HOST_PORT/v1"
 echo "  Container: $CONTAINER_NAME"
@@ -78,8 +79,8 @@ docker run -d \
         --quantization modelopt \
         --trust-remote-code \
         --gpu-memory-utilization 0.9 \
-        --max-model-len 32768 \
-        --served-model-name "Qwen3-VLTO-32B-Instruct-NVFP4" \
+        --max-model-len 262144 \
+        --served-model-name "Qwen3-VLTO-32B-Instruct-NVFP4-256K" \
         --host 0.0.0.0 \
         --port $CONTAINER_PORT
 

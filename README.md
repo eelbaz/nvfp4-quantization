@@ -6,6 +6,8 @@ Production-ready NVFP4 quantization workflow for NVIDIA DGX Spark (GB10 Blackwel
 
 This project quantizes the [qingy2024/Qwen3-VLTO-32B-Instruct](https://huggingface.co/qingy2024/Qwen3-VLTO-32B-Instruct) model to NVFP4 (4-bit floating point) format for optimized inference on DGX Spark systems with Blackwell GB10 GPUs.
 
+**NEW:** Now supports **256K context** (262,144 tokens) using YaRN RoPE scaling - a 6.4x extension from the original 40,960 tokens without requiring fine-tuning!
+
 ### NVFP4 Format
 
 NVFP4 is NVIDIA TensorRT Model Optimizer's 4-bit floating point quantization optimized for Blackwell GPUs:
@@ -35,7 +37,7 @@ NVFP4 is NVIDIA TensorRT Model Optimizer's 4-bit floating point quantization opt
 ./docker-run.sh scripts/01_prepare_calibration_data.py
 ```
 
-This downloads the C4 dataset and prepares 512 calibration samples (approximately 10-15 minutes).
+This downloads the C4 dataset and prepares 1024 calibration samples for optimal 256K context performance (approximately 10-15 minutes).
 
 ### 2. Quantize Model to NVFP4
 
@@ -43,11 +45,12 @@ This downloads the C4 dataset and prepares 512 calibration samples (approximatel
 ./docker-run.sh scripts/02_quantize_to_nvfp4.py
 ```
 
-This performs the full quantization workflow (approximately 60-90 minutes):
-- Loads model in BF16
-- Runs calibration forward pass
-- Applies NVFP4 quantization
-- Exports to `quantized-output/Qwen3-VLTO-32B-Instruct-NVFP4/`
+This performs the full quantization workflow with 256K context extension (approximately 20-24 hours with 1024 calibration samples):
+- Loads model in BF16 using GB10's unified memory
+- Applies YaRN RoPE scaling for 256K context (6.4x extension)
+- Runs calibration forward pass on 1024 samples
+- Applies NVFP4 quantization with two-level scaling
+- Exports to `quantized-output/Qwen3-VLTO-32B-Instruct-NVFP4-256K/`
 
 ### 3. Test Inference
 

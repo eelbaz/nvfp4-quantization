@@ -108,7 +108,7 @@ def load_quantized_model_vllm():
             quantization="modelopt",
             trust_remote_code=True,
             gpu_memory_utilization=0.9,
-            max_model_len=8192  # Adjust based on available memory
+            max_model_len=262144  # 256K context with YaRN RoPE scaling
         )
 
         logger.info(f"✓ Model loaded successfully with vLLM")
