@@ -1,0 +1,17 @@
+{
+  "model_name": "qingy2024/Qwen3-VLTO-32B-Instruct",
+  "quantization_format": "NVFP4",
+  "calibration_samples": 512,
+  "calibration_max_length": 2048,
+  "calibration_min_length": 100,
+  "calibration_dataset": "allenai/c4",
+  "calibration_dataset_config": "en",
+  "calibration_dataset_split": "train",
+  "target_device": "DGX Spark (GB10)",
+  "hf_cache_dir": "~/.cache/huggingface",
+  "output_dir": "./quantized-output/Qwen3-VLTO-32B-Instruct-NVFP4",
+  "log_dir": "./logs",
+  "torch_dtype": "bfloat16",
+  "device_map": "auto",
+  "trust_remote_code": true
+}
