@@ -143,18 +143,20 @@ def main():
         }
         torch_dtype = dtype_map[config['torch_dtype']]
 
-        # Load with auto device mapping for large models (enables CPU offloading)
+        # Use balanced device mapping to maximize GPU usage while avoiding OOM
+        # This will place as much as possible on GPU, with overflow to CPU
         model = AutoModelForCausalLM.from_pretrained(
             MODEL_NAME,
             torch_dtype=torch_dtype,
-            device_map="auto",  # Auto placement with CPU offloading
+            device_map="balanced",  # Balanced GPU+CPU with max GPU utilization
             cache_dir=str(HF_CACHE_DIR),
-            trust_remote_code=config['trust_remote_code']
+            trust_remote_code=config['trust_remote_code'],
+            max_memory={0: "100GiB", "cpu": "120GiB"}  # Use GB10 unified memory
         )
 
         # Log device placement
         device = next(model.parameters()).device
-        logger.info(f"✓ Model loaded with device_map='auto'")
+        logger.info(f"✓ Model loaded with device_map='balanced'")
         logger.info(f"  Primary device: {device}")
 
         # Check if any parameters are on CUDA
